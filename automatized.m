@@ -5,6 +5,7 @@ clear all
 close all
 clc
 restoredefaultpath
+
 % Sostituisci la parte del "matlab.desktop.editor" con questa:
 cd(fileparts(mfilename('fullpath')));
 addpath(genpath('.'))
@@ -17,9 +18,7 @@ if isempty(poolobj)
 end
 
 % 2. DEFINIZIONE DELLE CARTELLE DA ANALIZZARE
-% Inserisci qui i nomi esatti delle cartelle di input generate da Julia.
-% Si presume che si trovino tutte dentro la cartella './results/'
-cartelle_input = {'Re5000_Ordine3', 'Re5200_Ordine3', 'Re4800_Ordine3'}; 
+cartelle_input = {'Re5200_Ordine3', 'Re5000_Ordine3', 'Re4800_Ordine3'}; 
 
 % =========================================================================
 % 3. INIZIO CICLO AUTOMATIZZATO SUI VARI CASI
@@ -27,13 +26,26 @@ cartelle_input = {'Re5000_Ordine3', 'Re5200_Ordine3', 'Re4800_Ordine3'};
 for c = 1:length(cartelle_input)
     cartella_corrente = cartelle_input{c};
     fprintf('\n======================================================\n');
-    fprintf('ELABORAZIONE IN CORSO CARTELLA: %s\n', cartella_corrente);
+    fprintf('FOLDER: %s\n', cartella_corrente);
     fprintf('======================================================\n');
     
+    % --- LETTURA INTELLIGENTE DI REYNOLDS E ORDINE DAL NOME ---
+    % Trova tutti i numeri all'interno del nome della cartella
+    numeri_estratti = regexp(cartella_corrente, '\d+', 'match');
+    if length(numeri_estratti) >= 2
+        Re_base = str2double(numeri_estratti{1});       % Il primo numero è il Re
+        ordine_estratto = str2double(numeri_estratti{2}); % Il secondo numero è l'ordine
+    else
+        error('ERRORE: Impossibile estrarre il Reynolds e l''Ordine dal nome della cartella %s', cartella_corrente);
+    end
+    
+    fprintf('---> Actual parameters: Reynolds  = %d, Order = %d\n', Re_base, ordine_estratto);
+    % ----------------------------------------------------------
+    
     %----------------------------------------
-    % user input (Percorsi Aggiornati Dinamicamente)
+    % user input (Percorsi e Valori Aggiornati Dinamicamente)
     %----------------------------------------
-    order_trunc=[3]; 
+    order_trunc=[ordine_estratto]; 
     LU = 1;
     omega0=7.384/LU;
     coeffnorm=100;  
@@ -49,7 +61,7 @@ for c = 1:length(cartelle_input)
     f2use = @Uchannel_auto;
     namefile = strcat('../DPIM_NS 2/results/', cartella_corrente, '/param.mat'); 
     
-    nu0=coeffnorm*LU/5000;
+    nu0=coeffnorm*LU/Re_base; % <-- Usa il Reynolds estratto
     nu=nu0+0.0001;
     par_nu=nu;   
     
@@ -195,6 +207,9 @@ for c = 1:length(cartelle_input)
         view(2)
     end
     
+    % Aggiunta Titolo Figura 12 (Usando direttamente Re_base)
+    sgtitle(sprintf('FRC 3D (Re = %d, Ordine = %d)', Re_base, order_trunc(1)));
+    
     % --- SALVATAGGIO FIGURA MATCONT 12 (Formato .fig) ---
     saveas(figure(12), strcat('../DPIM_NS 2/results/', cartella_corrente, '/Figure_12_FRC_3D.fig'));
     
@@ -241,22 +256,24 @@ for c = 1:length(cartelle_input)
       figure(100)
       plot(frf(1:end-1,1),frf(1:end-1,2),'--k')
       xlim([4000,5000]);
+      title(sprintf('FRC Upper (Re = %d, Ordine = %d)', Re_base, order_trunc(1))); % Usando Re_base
       
       figure(101)
       plot(frfm(1:end-1,1),frfm(1:end-1,2),'--k')
       xlim([4000,5000]);
+      title(sprintf('FRC Lower (Re = %d, Ordine = %d)', Re_base, order_trunc(1))); % Usando Re_base
       
       figure(102)
       hold on
       plot(frfm(1:end-1,1),(frf(1:end-1,2)-frfm(1:end-1,2))/2,'-b')
       xlim([4000,5000]);
+      title(sprintf('FRC Amplitude (Re = %d, Ordine = %d)', Re_base, order_trunc(1))); % Usando Re_base
       
       % --- SALVATAGGIO FIGURE MATCONT 100, 101, 102 (Formato .fig) ---
       saveas(figure(100), strcat('../DPIM_NS 2/results/', cartella_corrente, '/Figure_100_FRC_Upper.fig'));
       saveas(figure(101), strcat('../DPIM_NS 2/results/', cartella_corrente, '/Figure_101_FRC_Lower.fig'));
       saveas(figure(102), strcat('../DPIM_NS 2/results/', cartella_corrente, '/Figure_102_FRC_Amplitude.fig'));
     end
-
     % =========================================================================
     % PARTE 2: CALCOLO ANALITICO DELLA TKE (PARALLELIZZATO)
     % =========================================================================
@@ -273,8 +290,8 @@ for c = 1:length(cartelle_input)
     
     LU = 1;
     coeffnorm = 100;
-    nu0 = coeffnorm * LU / 5000; 
-    order_trunc = [3]; 
+    nu0 = coeffnorm * LU / Re_base;  
+    order_trunc = [ordine_estratto]; 
     [nPages, nNodes, nComponents] = size(mappings_r);
     nred = size(Avector, 2) - 1; 
     
@@ -327,7 +344,7 @@ for c = 1:length(cartelle_input)
     grid on;
     xlabel('$Re$', 'Interpreter', 'latex', 'FontSize', 14);
     ylabel('$\langle TKE \rangle$', 'Interpreter', 'latex', 'FontSize', 14);
-    title(sprintf('Turbulent Kinetic Energy (ROM Order %d)', order_trunc(1)), 'FontSize', 12);
+    title(sprintf('Turbulent Kinetic Energy (Re = %d, Ordine = %d)', Re_base, order_trunc(1)), 'FontSize', 12); % Usando Re_base
     xlim([4000,6000]);
     
     saveas(fig_tke, strcat('../DPIM_NS 2/results/', cartella_corrente, '/Figure_TKE_Diagram.fig'));
@@ -337,7 +354,6 @@ for c = 1:length(cartelle_input)
     fprintf('---> Dati e grafici (.fig) salvati con successo per %s\n', cartella_corrente);
     
 end % Fine del ciclo sulle cartelle
-
 disp('TUTTE LE CARTELLE SONO STATE PROCESSATE CON SUCCESSO!');
 
 %----------------------------------------------
